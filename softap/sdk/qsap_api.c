@@ -1943,6 +1943,11 @@ s16 wifi_qsap_reset_to_default(s8 *pcfgfile, s8 *pdefault)
     if(eERR_UNKNOWN == rename(buf, pcfgfile))
         status = eERR_CONF_FILE;
 
+    if (chown(pcfgfile, AID_WIFI, AID_WIFI) < 0) {
+        ALOGE("Error changing group ownership of %s to %d: %s",
+                pcfgfile, AID_WIFI, strerror(errno));
+    }
+
     /** Remove the temporary file. Dont care the return value */
     unlink(buf);
 
@@ -3068,7 +3073,7 @@ int qsapsetSoftap(int argc, char *argv[])
     ALOGD("%s, %s, %s, %d\n", __FUNCTION__, argv[0], argv[1], argc);
 
     for ( i=0; i<argc;i++) {
-        ALOGD("ARG: %d - %s\n", i+1, argv[i]);
+        ALOGV("ARG: %d - %s\n", i+1, argv[i]);
     }
 
     /** set SSID */
