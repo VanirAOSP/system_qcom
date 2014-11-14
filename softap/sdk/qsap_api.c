@@ -152,6 +152,7 @@ static struct Command cmd_list[eCMD_LAST] = {
     { "setchannelrange",       NULL             },
     { "autochannel",           NULL             },
     { "ieee80211w",            NULL             },
+    { "wpa_key_mgmt",          NULL             },
 };
 
 struct Command qsap_str[eSTR_LAST] = {
@@ -1272,7 +1273,7 @@ int qsap_get_mode(s32 *pmode)
     *pmode = -1;
     if(NULL == (pif = qsap_get_config_value(pconffile,
                                  &qsap_str[STR_INTERFACE], interface, &len))) {
-        ALOGV("%s :interface error \n", __func__);
+        ALOGD("%s :interface error \n", __func__);
         goto error;
     }
 
@@ -1280,7 +1281,7 @@ int qsap_get_mode(s32 *pmode)
 
     sock = socket(AF_INET, SOCK_DGRAM, 0);
     if(sock < 0) {
-        ALOGV("%s :socket error \n", __func__);
+        ALOGD("%s :socket error \n", __func__);
         goto error;
     }
 
@@ -1402,7 +1403,7 @@ int qsap_read_channel(s8 *pfile, struct Command *pcmd, s8 *presp, u32 *plen, s8 
 
    if(eSUCCESS == qsap_get_operating_channel(&chan)) {
             *plen = qsap_scnprintf(presp, len, "%s %s=%lu", SUCCESS, pcmd->name, chan);
-             ALOGV("presp :%s\n", presp);
+             ALOGD("presp :%s\n", presp);
    } else {
           *plen = qsap_scnprintf(presp, len, "%s", ERR_UNKNOWN);
    }
@@ -1463,6 +1464,7 @@ void qsap_get_associated_sta_mac(s8 *presp, u32 *plen)
     u32 len = MAX_CONF_LINE_LEN;
     s8 *pif;
     s8 *pbuf, *pout;
+    u32 buflen;
     u32 recvLen;
     u32 tlen;
 
@@ -1482,7 +1484,9 @@ void qsap_get_associated_sta_mac(s8 *presp, u32 *plen)
         goto error;
     }
 
-    pbuf = (s8 *)malloc((MAX_STA_ALLOWED * 6) + 8);
+    /* response has length field + 6 bytes per STA */
+    buflen = sizeof(u32) + (MAX_STA_ALLOWED * 6);
+    pbuf = (s8 *)malloc(buflen);
     if(NULL == pbuf) {
         ALOGE("%s :No memory \n", __func__);
         close(sock);
@@ -1492,7 +1496,7 @@ void qsap_get_associated_sta_mac(s8 *presp, u32 *plen)
 
 #define SIZE_OF_MAC_INT   (6)
     strlcpy(wrq.ifr_name, pif, sizeof(wrq.ifr_name));
-    wrq.u.data.length = SIZE_OF_MAC_INT * 8 + 8; /** 8 supported MAC and 7 SPACE separators and a '\0' */
+    wrq.u.data.length = buflen;
     wrq.u.data.pointer = (void *)pbuf;
     wrq.u.data.flags = 0;
 
@@ -1504,13 +1508,14 @@ void qsap_get_associated_sta_mac(s8 *presp, u32 *plen)
         goto error;
     }
 
-    recvLen = *(unsigned long int *)(wrq.u.data.pointer);
+    recvLen = *(u32 *)(wrq.u.data.pointer);
+    recvLen -= sizeof(u32);
 
     len = qsap_scnprintf(presp, *plen, "%s %s=", SUCCESS, cmd_list[eCMD_ASSOC_STA_MACS].name);
     pout = presp + len;
     tlen = *plen - len;
 
-    qsap_mac_to_macstr(pbuf+sizeof(unsigned long int), recvLen, pout, &tlen);
+    qsap_mac_to_macstr(pbuf+sizeof(u32), recvLen, pout, &tlen);
 
     *plen = len + tlen;
 
@@ -1712,7 +1717,7 @@ static void qsap_get_from_config(esap_cmd_t cNum, s8 *presp, u32 *plen)
                 break;
 
         case eCMD_REGULATORY_DOMAIN:
-                qsap_read_cfg(fIni, &qsap_str[STR_802DOT11D_IN_INI], presp, plen, cmd_list[eCMD_REGULATORY_DOMAIN].name, GET_ENABLED_ONLY);
+                qsap_read_cfg(pconffile, &cmd_list[cNum], presp, plen, NULL, GET_ENABLED_ONLY);
                 break;
 
         case eCMD_RTS_THRESHOLD:
@@ -2050,7 +2055,7 @@ static int qsap_send_cmd_to_hostapd(s8 *pcmd)
 
     ser.sun_family = AF_UNIX;
     qsap_scnprintf(ser.sun_path, sizeof(ser.sun_path), "%s", ptr);
-    ALOGV("Connect to: %s,(%d)\n", ser.sun_path, sock);
+    ALOGD("Connect to: %s,(%d)\n", ser.sun_path, sock);
 
     ret = connect(sock, (struct sockaddr *)&ser, sizeof(ser));
     if(ret < 0) {
@@ -2205,7 +2210,7 @@ static void qsap_config_wps_method(s8 *pVal, s8 *presp, u32 *plen)
         qsap_scnprintf(buf, sizeof(buf), "WPS_PBC");
     else {
         if(strlen(ptr) < WPS_KEY_LEN) {
-            ALOGV("%s :Invalid WPS key length\n", __func__);
+            ALOGD("%s :Invalid WPS key length\n", __func__);
             *plen = qsap_scnprintf(presp, *plen, "%s", ERR_INVALID_PARAM);
             return;
         }
@@ -2301,7 +2306,7 @@ void qsap_disassociate_sta(s8 *pVal, s8 *presp, u32 *plen)
         goto end;
     }
 
-    strncpy(wrq.ifr_name, pif, sizeof(wrq.ifr_name));
+    strlcpy(wrq.ifr_name, pif, sizeof(wrq.ifr_name));
 
     if (TRUE != qsap_get_mac_in_bytes(pVal, (char *) &wrq.u)) {
         ALOGE("%s: Invalid input \n", __func__);
@@ -3041,7 +3046,7 @@ void qsap_hostd_exec_cmd(s8 *pcmd, s8 *presp, u32 *plen)
         *plen = qsap_scnprintf(presp, *plen, "%s", ERR_INVALIDREQ);
     }
 
-    ALOGV("CMD OUTPUT [%s]\nlen :%lu\n\n", presp, *plen);
+    ALOGD("CMD OUTPUT [%s]\nlen :%lu\n\n", presp, *plen);
 
     return;
 }
@@ -3065,7 +3070,7 @@ int qsapsetSoftap(int argc, char *argv[])
 {
     char cmdbuf[CMD_BUF_LEN];
     char respbuf[RECV_BUF_LEN];
-    unsigned long int rlen = RECV_BUF_LEN;
+    u32 rlen = RECV_BUF_LEN;
     int i;
     int hidden = 0;
     int sec = SEC_MODE_NONE;
@@ -3177,6 +3182,20 @@ int qsapsetSoftap(int argc, char *argv[])
     return 0;
 }
 
+
+static int check_for_config_file_size(FILE *fp)
+{
+   int length = 0;
+
+   if( NULL != fp )
+   {
+      fseek(fp, 0L, SEEK_END);
+      length = ftell(fp);
+   }
+
+   return length;
+}
+
 void check_for_configuration_files(void)
 {
     FILE * fp;
@@ -3189,6 +3208,11 @@ void check_for_configuration_files(void)
         wifi_qsap_reset_to_default(CONFIG_FILE, DEFAULT_CONFIG_FILE_PATH);
     }
     else {
+
+        /* The configuration file could be of 0 byte size, replace with default */
+        if (check_for_config_file_size(fp) <= 0)
+            wifi_qsap_reset_to_default(CONFIG_FILE, DEFAULT_CONFIG_FILE_PATH);
+
         fclose(fp);
     }
 
@@ -3197,6 +3221,11 @@ void check_for_configuration_files(void)
         wifi_qsap_reset_to_default(ACCEPT_LIST_FILE, DEFAULT_ACCEPT_LIST_FILE_PATH);
     }
     else {
+
+        /* The configuration file could be of 0 byte size, replace with default */
+        if (check_for_config_file_size(fp) <= 0)
+            wifi_qsap_reset_to_default(ACCEPT_LIST_FILE, DEFAULT_ACCEPT_LIST_FILE_PATH);
+
         fclose(fp);
     }
 
@@ -3205,6 +3234,11 @@ void check_for_configuration_files(void)
         wifi_qsap_reset_to_default(DENY_LIST_FILE, DEFAULT_DENY_LIST_FILE_PATH);
     }
     else {
+
+        /* The configuration file could be of 0 byte size, replace with default */
+        if (check_for_config_file_size(fp) <= 0)
+            wifi_qsap_reset_to_default(DENY_LIST_FILE, DEFAULT_DENY_LIST_FILE_PATH);
+
         fclose(fp);
     }
 
