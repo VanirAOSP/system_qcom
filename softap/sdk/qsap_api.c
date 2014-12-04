@@ -1273,7 +1273,7 @@ int qsap_get_mode(s32 *pmode)
     *pmode = -1;
     if(NULL == (pif = qsap_get_config_value(pconffile,
                                  &qsap_str[STR_INTERFACE], interface, &len))) {
-        ALOGD("%s :interface error \n", __func__);
+        ALOGV("%s :interface error \n", __func__);
         goto error;
     }
 
@@ -1281,7 +1281,7 @@ int qsap_get_mode(s32 *pmode)
 
     sock = socket(AF_INET, SOCK_DGRAM, 0);
     if(sock < 0) {
-        ALOGD("%s :socket error \n", __func__);
+        ALOGV("%s :socket error \n", __func__);
         goto error;
     }
 
@@ -1403,7 +1403,7 @@ int qsap_read_channel(s8 *pfile, struct Command *pcmd, s8 *presp, u32 *plen, s8 
 
    if(eSUCCESS == qsap_get_operating_channel(&chan)) {
             *plen = qsap_scnprintf(presp, len, "%s %s=%lu", SUCCESS, pcmd->name, chan);
-             ALOGD("presp :%s\n", presp);
+             ALOGV("presp :%s\n", presp);
    } else {
           *plen = qsap_scnprintf(presp, len, "%s", ERR_UNKNOWN);
    }
@@ -2055,7 +2055,7 @@ static int qsap_send_cmd_to_hostapd(s8 *pcmd)
 
     ser.sun_family = AF_UNIX;
     qsap_scnprintf(ser.sun_path, sizeof(ser.sun_path), "%s", ptr);
-    ALOGD("Connect to: %s,(%d)\n", ser.sun_path, sock);
+    ALOGV("Connect to: %s,(%d)\n", ser.sun_path, sock);
 
     ret = connect(sock, (struct sockaddr *)&ser, sizeof(ser));
     if(ret < 0) {
@@ -2210,7 +2210,7 @@ static void qsap_config_wps_method(s8 *pVal, s8 *presp, u32 *plen)
         qsap_scnprintf(buf, sizeof(buf), "WPS_PBC");
     else {
         if(strlen(ptr) < WPS_KEY_LEN) {
-            ALOGD("%s :Invalid WPS key length\n", __func__);
+            ALOGV("%s :Invalid WPS key length\n", __func__);
             *plen = qsap_scnprintf(presp, *plen, "%s", ERR_INVALID_PARAM);
             return;
         }
@@ -3046,7 +3046,7 @@ void qsap_hostd_exec_cmd(s8 *pcmd, s8 *presp, u32 *plen)
         *plen = qsap_scnprintf(presp, *plen, "%s", ERR_INVALIDREQ);
     }
 
-    ALOGD("CMD OUTPUT [%s]\nlen :%lu\n\n", presp, *plen);
+    ALOGV("CMD OUTPUT [%s]\nlen :%lu\n\n", presp, *plen);
 
     return;
 }
